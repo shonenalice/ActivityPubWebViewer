@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ActivityPub Web Viewer</title>
+    <meta name="description" content="ActivityPub対応SNSの公開投稿を手軽に閲覧できるWebアプリケーション">
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- アプリケーション設定 -->
+    <script>
+        const APP_CONFIG = {
+            app: {
+                name: 'ActivityPub Web Viewer',
+                version: '1.0.0',
+                timeout: 10,
+                timezone: 'Asia/Tokyo'
+            },
+            security: {
+                allowedDomains: ['*'], // '*' で全ドメイン許可
+                forceHttps: true,
+                maxContentLength: 10000,
+                allowedHtmlTags: ['p', 'br', 'a', 'strong', 'em']
+            },
+            display: {
+                maxPosts: 20,
+                dateFormat: 'Y年m月d日 H:i',
+                enableImages: true,
+                maxImageWidth: 600
+            },
+            api: {
+                userAgent: 'ActivityPubWebViewer/1.0 (+https://yourdomain.com/about)',
+                acceptHeader: 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
+            },
+            sampleUrls: [
+                {
+                    name: 'shonenalice',
+                    url: 'https://mstdn.jp/users/shonenalice',
+                    description: 'あなたのアカウント（mstdn.jp）'
+                },
+                {
+                    name: 'shonenalice (Misskey)',
+                    url: 'https://misskey.io/@shonenalice',
+                    description: 'あなたのMisskeyアカウント'
+                },
+                {
+                    name: 'Mastodon.social 公式',
+                    url: 'https://mastodon.social/users/Mastodon',
+                    description: 'Mastodonの公式アカウント'
+                },
+                {
+                    name: 'Gargron（Mastodon開発者）',
+                    url: 'https://mastodon.social/users/Gargron',
+                    description: 'Mastodonの開発者アカウント'
+                },
+                {
+                    name: 'Misskey.io 公式',
+                    url: 'https://misskey.io/users/7rkrarq81i',
+                    description: 'Misskey.ioの公式アカウント'
+                },
+                {
+                    name: 'syuilo（Misskey開発者）',
+                    url: 'https://misskey.io/users/7rkrarq81i',
+                    description: 'Misskeyの開発者アカウント'
+                },
+                {
+                    name: 'GoToSocial 公式',
+                    url: 'https://gts.superseriousbusiness.org/users/gotosocial',
+                    description: 'GoToSocial公式アカウント（修正版）'
+                },
+                {
+                    name: 'Friendica テスト',
+                    url: 'https://libranet.de/users/libranet',
+                    description: 'Friendica公開テストアカウント'
+                },
+                {
+                    name: 'Pleroma テスト（活発）',
+                    url: 'https://pleroma.soykaf.com/users/lain',
+                    description: 'Pleroma開発者アカウント（投稿多数）'
+                },
+                {
+                    name: 'Hubzilla 開発者',
+                    url: 'https://hub.somaton.com/channel/mario',
+                    description: 'Hubzilla開発者Mario Vavti氏'
+                }
+            ]
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <header class="app-header">
+            <h1>ActivityPub Web Viewer</h1>
+            <p class="app-description">ActivityPub対応SNSの公開投稿を手軽に閲覧</p>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- 入力エリア -->
+            <section class="input-section">
+                <form id="fetch-form" class="fetch-form">
+                    <div class="form-group">
+                        <label for="actor-url" class="form-label">
+                            ActivityPub ユーザーURL
+                        </label>
+                        <input 
+                            type="url" 
+                            id="actor-url" 
+                            name="actor_url"
+                            class="form-input"
+                            placeholder="https://mastodon.social/users/Gargron"
+                            required
+                        >
+                        <div class="form-help">
+                            例: https://mastodon.social/users/ユーザー名
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" id="fetch-button" class="btn btn-primary">
+                            <span class="btn-text">投稿を表示</span>
+                            <span class="btn-loading" style="display: none;">取得中...</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- サンプルURL -->
+                <div class="sample-urls">
+                    <h3>サンプルURL</h3>
+                    <div id="sample-url-list" class="sample-list">
+                        <!-- JavaScriptで動的生成 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ローディングエリア -->
+            <section id="loading-section" class="loading-section" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p class="loading-text">データを取得しています...</p>
+            </section>
+
+            <!-- エラー表示エリア -->
+            <section id="error-section" class="error-section" style="display: none;">
+                <div class="error-content">
+                    <h3 class="error-title">エラーが発生しました</h3>
+                    <p id="error-message" class="error-message"></p>
+                    <button id="retry-button" class="btn btn-secondary">再試行</button>
+                </div>
+            </section>
+
+            <!-- 結果表示エリア -->
+            <section id="results-section" class="results-section" style="display: none;">
+                <!-- ユーザー情報 -->
+                <div id="actor-info" class="actor-info">
+                    <!-- JavaScriptで動的生成 -->
+                </div>
+
+                <!-- 投稿一覧 -->
+                <div id="posts-container" class="posts-container">
+                    <!-- JavaScriptで動的生成 -->
+                </div>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <p>&copy; 2025 ActivityPub Web Viewer</p>
+                <div class="footer-links">
+                    <a href="https://www.w3.org/TR/activitypub/" target="_blank" rel="noopener">ActivityPub仕様</a>
+                    <span class="footer-separator">|</span>
+                    <a href="#" onclick="showAbout()">このアプリについて</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- JavaScript読み込み -->
+    <script src="js/app.js"></script>
+    <script src="js/form-handler.js"></script>
+    <script src="js/api-client.js"></script>
+    <script src="js/post-renderer.js"></script>
+    <script src="js/error-handler.js"></script>
+    <script src="js/loading-manager.js"></script>
+    <script src="js/sample-urls.js"></script>
+
+    <!-- このアプリについてダイアログ -->
+    <div id="about-dialog" class="dialog-overlay" style="display: none;">
+        <div class="dialog-content">
+            <h3>ActivityPub Web Viewer について</h3>
+            <p>このアプリケーションは、ActivityPub対応SNS（Mastodon、Misskeyなど）の公開投稿を手軽に閲覧するためのツールです。</p>
+            <ul>
+                <li>アカウント登録不要</li>
+                <li>公開投稿のみ表示</li>
+                <li>データの保存は行いません</li>
+            </ul>
+            <p><strong>注意:</strong> 投稿内容の著作権は元の投稿者に帰属します。</p>
+            <button onclick="hideAbout()" class="btn btn-primary">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        function showAbout() {
+            document.getElementById('about-dialog').style.display = 'flex';
+        }
+        
+        function hideAbout() {
+            document.getElementById('about-dialog').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
